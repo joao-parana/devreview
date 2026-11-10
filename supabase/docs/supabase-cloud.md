@@ -1,7 +1,11 @@
 # Usando o Supabase Cloud no DevReview
 
-Este guia explica o que muda no projeto para trocar o Supabase **local** (`npx supabase start`, no Colima)
-pelo projeto na **nuvem**:
+Este fork usa **somente o Supabase Cloud** — o stack local (`npx supabase start`, Docker/Colima) não é usado.
+Este guia explica o que muda em relação ao projeto-base do curso (que roda o Supabase local):
+
+> **Regra de ouro do CLI 3.x:** comandos de banco (`db push`, `migration list`, `migration repair`…) miram o
+> banco **local** por padrão. Para a nuvem, **sempre** acrescente `--remote`. Sem ele, o erro é
+> `DbConnectError ... connect ECONNREFUSED 127.0.0.1:54322` — o CLI tentou o Docker local, não a nuvem.
 
 | Item           | Valor                                                                   |
 | -------------- | ----------------------------------------------------------------------- |
@@ -16,9 +20,9 @@ aplicados e **quais chaves** o app usa.
 
 | O quê                                           | Local                            | Cloud                       | Ação                              |
 | ----------------------------------------------- | -------------------------------- | --------------------------- | --------------------------------- |
-| `supabase/migrations/00001_init_schema.sql`     | `db reset`                       | `db push`                   | nenhuma                           |
+| `supabase/migrations/00001_init_schema.sql`     | `db reset`                       | `db push --remote`          | nenhuma                           |
 | `supabase/migrations/00002_data_api_grants.sql` | —                                | **obrigatória**             | já criada (ver passo 3)           |
-| `supabase/seed.sql`                             | `db reset`                       | `db push --include-seed`    | nenhuma                           |
+| `supabase/seed.sql`                             | `db reset`                       | `db push --remote --include-seed` | nenhuma                           |
 | `supabase/config.toml`                          | ports, auth, studio              | ignorado pela nuvem         | ajustar `major_version` (passo 2) |
 | `supabase/.temp/`                               | —                                | criado pelo `supabase link` | já está no `.gitignore`           |
 | `apps/web/.env`                                 | `localhost:54321` + anon demo    | URL cloud + publishable key | trocar valores                    |
@@ -118,12 +122,21 @@ Pontos importantes:
 ## Passo 4 — Aplicar schema e seed na nuvem
 
 ```bash
-npx supabase db push --dry-run --agent no          # mostra o que seria aplicado
-npx supabase db push --include-seed --agent no     # aplica 00001 + 00002 e roda o seed.sql
-npx supabase migration list             # confere Local x Remote
+npx supabase migration list --remote --agent no                 # Local x Remote (antes: Remote vazio)
+npx supabase db push --remote --dry-run --agent no              # mostra o que seria aplicado
+npx supabase db push --remote --include-seed --agent no         # aplica 00001 + 00002 e roda o seed.sql
+npx supabase migration list --remote --agent no                 # depois: Local = Remote
 ```
 
-- **Não use `db reset --linked`** depois que houver dados reais: ele apaga o banco remoto.
+> **CLI 3.x: o alvo padrão é o banco LOCAL.** Sem `--remote`, `db push` e `migration list` tentam
+> `127.0.0.1:54322` (o `supabase start`) mesmo com o projeto linkado. `--remote` usa o projeto linkado; a
+> senha é pedida no prompt, ou passe `-p` / `SUPABASE_DB_PASSWORD`.
+
+- A ordem importa: a `00002` dá `GRANT` nas tabelas criadas pela `00001`, por isso as duas sobem juntas.
+- Se a `00001` falhar com `relation "teams" already exists`, as tabelas já foram criadas por fora (ex.: SQL
+  Editor). Nesse caso, marque-a como aplicada sem rodar:
+  `npx supabase migration repair 00001 --status applied --remote --agent no`, e repita o `db push`.
+- **Não use `db reset --remote`** depois que houver dados reais: ele apaga o banco remoto.
 - O `seed.sql` faz `insert` com IDs fixos: rodá-lo duas vezes falha por chave duplicada. Para recarregar os
   dados, limpe as tabelas antes, pelo **SQL Editor** ou `psql`.
 
@@ -158,19 +171,9 @@ SUPABASE_SERVICE_KEY=sb_secret_xxxxxxxxxxxxxxxx
   `.env.example`: eles continuam apontando para o ambiente local, como o curso espera.
 - Se algo falhar com as chaves novas, use as legadas (`anon` / `service_role`) enquanto ainda forem aceitas.
 
-### Alternar entre local e cloud no frontend
-
-O Vite carrega `.env.<mode>` conforme o `--mode`. Mantenha os dois ambientes lado a lado:
-
-```bash
-# apps/web/.env        -> local  (copiado do .env.example)
-# apps/web/.env.cloud  -> cloud  (valores acima)
-npm -w apps/web run dev                    # local
-npm -w apps/web run dev -- --mode cloud    # cloud
-```
-
-O MCP server lê `apps/mcp-server/.env` via `node --env-file=...` (nas aulas finais). Para alternar, aponte o
-`--env-file` para outro arquivo (ex.: `.env.cloud`).
+Como este fork usa **só a nuvem**, os valores acima vão direto em `apps/web/.env` e `apps/mcp-server/.env`;
+`npm run dev` já sobe o frontend contra o Supabase Cloud. O MCP server lê `apps/mcp-server/.env` via
+`node --env-file=...` (nas aulas finais).
 
 ## Passo 6 — MCP oficial do Supabase (aulas finais)
 
@@ -207,8 +210,8 @@ serve **só** para isso e para o CLI; o app nunca a usa.
 - [ ] `npx supabase login` e `npx supabase link --project-ref lruandogseofophefsum`
 - [ ] `major_version` do `config.toml` igual à versão da nuvem
 - [x] `supabase/migrations/00002_data_api_grants.sql` criada
-- [ ] `npx supabase db push --include-seed` sem erros; `migration list` com Local = Remote
-- [ ] `apps/web/.env.cloud` e `apps/mcp-server/.env` com URL e chaves da nuvem
+- [ ] `npx supabase db push --remote --include-seed` sem erros; `migration list --remote` com Local = Remote
+- [ ] `apps/web/.env` e `apps/mcp-server/.env` com URL e chaves da nuvem
 - [ ] Dashboard → **Advisors → Security** sem alertas de "RLS disabled"
 - [ ] App em `http://localhost:5173` mostrando os dados sem o banner de erro
 
