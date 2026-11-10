@@ -36,6 +36,12 @@ npm run dev
 O app abre em `http://localhost:5173`.
 O Supabase Studio fica em `http://localhost:54323`.
 
+## Opção com Database Supabase na Nuvem
+
+> Database -> https://lruandogseofophefsum.supabase.co
+
+[DOC com detalhes](https://docs.google.com/document/d/1JRieEjoyAJFcNHKEVaBn1UdVAQ7uCPs5cipSkBTEY_E/edit?tab=t.0#heading=h.br0j4mkta9qr)
+
 ## Estrutura
 
 ```

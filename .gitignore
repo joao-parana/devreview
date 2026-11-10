@@ -4,6 +4,8 @@ build/
 .env
 .env.*
 !.env.example
-docs/
+/docs/
 .supabase/
+supabase/.temp/
+supabase/.branches/
 *.tsbuildinfo
